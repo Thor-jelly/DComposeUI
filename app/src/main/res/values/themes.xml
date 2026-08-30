@@ -1,0 +1,7 @@
+<resources>
+    <!-- Compose 工程的宿主主题：无 ActionBar，配色交给 AppComposeTheme 管理 -->
+    <style name="Theme.DComposeUI" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
