@@ -1,5 +1,6 @@
 package com.ddw.dcomposeui.demo.screen
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -12,9 +13,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,7 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,17 +66,36 @@ private data class OrderLine(
     val status: String
 )
 
-/** Demo 里展示的四种表格用法 */
+/**
+ * 类描述：Demo 用的商品用量配置行（演示可编辑单元格：下拉/输入/操作）
+ *
+ * 创建人：吴冬冬
+ *
+ * 创建时间：2026/08/17 11:30
+ */
+private data class UsageRow(
+    val spec: String,
+    val part: String,
+    val usage: String,
+    val lossRate: String,
+    val lossQty: String,
+    val unit: String
+)
+
+/** Demo 里展示的表格用法（与 DSyncTable 预览一一对应） */
 private enum class TableMode(val label: String) {
     Basic("基础表格"),
+    Custom("自定义单元格"),
     Group("分组 + 小计"),
+    Footer("合计固定底部"),
     Merged("纵向合并"),
+    NoHeader("无表头"),
     Empty("空数据")
 }
 
 /**
  * 组件描述：DSyncTable 演示。左侧「商品」列冻结不动，右侧多列横向滚动，表头与所有行联动；
- * 分组模式演示 fullSpanRow 与 columnRow，合并模式演示 mergedItem 的不连续纵向合并。
+ * 覆盖基础/自定义单元格/分组小计/合计固定底部/纵向合并/无表头/空数据等场景。
  *
  * @param onBack 返回首页
  */
@@ -78,7 +103,9 @@ private enum class TableMode(val label: String) {
 fun DSyncTableDemo(onBack: () -> Unit) {
     var mode by remember { mutableStateOf(TableMode.Basic) }
     val lines = remember { mockLines() }
+    val usageRows = remember { mockUsageRows() }
     val columns = rememberOrderColumns()
+    val usageColumns = rememberUsageColumns()
 
     DemoScaffold(title = "DSyncTable", onBack = onBack, contentPadding = 0.dp) {
         Row(
@@ -96,8 +123,11 @@ fun DSyncTableDemo(onBack: () -> Unit) {
         Text(
             text = when (mode) {
                 TableMode.Basic -> "左右滑动表格：商品列固定，其余列跟着表头一起横向滚动，固定列右侧有滚动阴影"
+                TableMode.Custom -> "单元格可放任意内容：这里放了下拉、输入框、带问号提示的表头，以及增删操作按钮"
                 TableMode.Group -> "fullSpanRow 铺满可视宽度不参与横滚，columnRow 按列渲染小计并参与横滚"
+                TableMode.Footer -> "stickyFooterRow 合计行：上表数据少→合计紧跟在数据下方；下表数据多→数据区内部滚动、合计钉在底部"
                 TableMode.Merged -> "合并列与拆分列按「合 不合 合 不合 合 不合 合」交替，mergeColumns 传下标集合、不要求连续。传了 minSubRowHeight 就按内容自适应：第 1 行规格换行把整组撑高，第 2 行长姓名只把所在子行撑高，其余走 40dp 最小高度"
+                TableMode.NoHeader -> "showHeader = false 时不画表头行，直接从数据行开始，其余能力不变"
                 TableMode.Empty -> "一行都没声明时展示 emptyText，表头仍然保留"
             },
             color = AppColors.BasicThree,
@@ -118,6 +148,14 @@ fun DSyncTableDemo(onBack: () -> Unit) {
                     minRowHeight = 52.dp
                 ) {
                     items(lines, key = { it.index })
+                }
+
+                TableMode.Custom -> DSyncTable(
+                    columns = usageColumns,
+                    modifier = Modifier.fillMaxWidth(),
+                    minRowHeight = 48.dp
+                ) {
+                    items(usageRows, key = { it.spec + it.part })
                 }
 
                 TableMode.Group -> DSyncTable(
@@ -149,7 +187,82 @@ fun DSyncTableDemo(onBack: () -> Unit) {
                     }
                 }
 
+                // 两个表格上下对比：短表数据少不滚动、合计跟随；长表数据多、数据区滚动、合计钉底
+                TableMode.Footer -> Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "① 数据少·不滚动：合计紧跟在数据下方",
+                        color = AppColors.BasicTwo,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    val shortLines = lines.take(2)
+                    DSyncTable(
+                        columns = columns,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        minRowHeight = 52.dp
+                    ) {
+                        items(shortLines, key = { it.index })
+                        stickyFooterRow(key = "short_total") { columnIndex ->
+                            when (columnIndex) {
+                                0 -> TableCellText(text = "合计", fontWeight = FontWeight.Medium)
+                                1 -> TableCellText(
+                                    text = shortLines.sumOf { it.qty.toInt() }.toString(),
+                                    fontWeight = FontWeight.Medium
+                                )
+                                3 -> TableCellText(
+                                    text = shortLines.sumOf { it.amount.toInt() }.toString(),
+                                    color = AppColors.AccentRed,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = "② 数据多·数据区滚动：合计钉在表格底部",
+                        color = AppColors.BasicTwo,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    DSyncTable(
+                        columns = columns,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        minRowHeight = 52.dp
+                    ) {
+                        items(lines, key = { it.index })
+                        stickyFooterRow(key = "long_total") { columnIndex ->
+                            when (columnIndex) {
+                                0 -> TableCellText(text = "合计", fontWeight = FontWeight.Medium)
+                                1 -> TableCellText(
+                                    text = lines.sumOf { it.qty.toInt() }.toString(),
+                                    fontWeight = FontWeight.Medium
+                                )
+                                3 -> TableCellText(
+                                    text = lines.sumOf { it.amount.toInt() }.toString(),
+                                    color = AppColors.AccentRed,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
                 TableMode.Merged -> MergedTable()
+
+                TableMode.NoHeader -> DSyncTable(
+                    columns = columns,
+                    showHeader = false,
+                    modifier = Modifier.fillMaxWidth(),
+                    minRowHeight = 52.dp
+                ) {
+                    items(lines, key = { it.index })
+                }
 
                 TableMode.Empty -> DSyncTable(
                     columns = columns,
@@ -193,6 +306,47 @@ private fun rememberOrderColumns(): List<DTableColumn<OrderLine>> = remember {
 }
 
 /**
+ * 列定义：商品用量配置——规格列冻结，其余列放下拉/输入框/带提示表头/操作按钮
+ */
+@Composable
+private fun rememberUsageColumns(): List<DTableColumn<UsageRow>> = remember {
+    listOf(
+        DTableColumn(
+            width = 110.dp,
+            frozen = true,
+            header = { TableHeaderText("规格") },
+            cell = { row -> TableCellText(row.spec.ifEmpty { "-" }) }
+        ),
+        DTableColumn(
+            width = 100.dp,
+            header = { TableHeaderText("部位") },
+            cell = { row -> DropdownCell(row.part) }
+        ),
+        DTableColumn(
+            width = 90.dp,
+            header = { TableHeaderText("用量") },
+            cell = { row -> InputFieldCell(row.usage) }
+        ),
+        DTableColumn(
+            width = 90.dp,
+            header = { HintHeaderCell(title = "损耗率", tip = "单位 %，损耗率 = 损耗量 / 用量 × 100%") },
+            cell = { row -> InputFieldCell(row.lossRate) }
+        ),
+        textColumn<UsageRow>("损耗量", 80.dp) { it.lossQty },
+        DTableColumn(
+            width = 100.dp,
+            header = { TableHeaderText("用量单位") },
+            cell = { row -> DropdownCell(row.unit) }
+        ),
+        DTableColumn(
+            width = 70.dp,
+            header = { TableHeaderText("操作") },
+            cell = { ActionCell() }
+        )
+    )
+}
+
+/**
  * 组件描述：一个单元格里放两行字段
  *
  * @param name 商品名
@@ -204,6 +358,104 @@ private fun ProductCell(name: String, spec: String) {
         Text(text = name, color = AppColors.BasicOne, fontSize = 13.sp, lineHeight = 18.sp)
         Spacer(Modifier.height(2.dp))
         Text(text = spec, color = AppColors.BasicThree, fontSize = 11.sp)
+    }
+}
+
+/**
+ * 组件描述：输入框样式单元格；值为「请输入」时按占位灰字显示
+ * @param text 单元格值
+ */
+@Composable
+private fun InputFieldCell(text: String) {
+    val placeholder = text == "请输入"
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .border(0.5.dp, AppColors.LineThree, RoundedCornerShape(4.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        TableCellText(text, color = if (placeholder) AppColors.BasicThree else AppColors.BasicOne)
+    }
+}
+
+/**
+ * 组件描述：下拉框样式单元格（文字 + 右侧下拉箭头）；值为「请选择」时按占位灰字显示
+ * @param text 单元格值
+ */
+@Composable
+private fun DropdownCell(text: String) {
+    val placeholder = text == "请选择"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .border(0.5.dp, AppColors.LineThree, RoundedCornerShape(4.dp))
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        TableCellText(text, color = if (placeholder) AppColors.BasicThree else AppColors.BasicOne)
+        ArrowDownIcon()
+    }
+}
+
+/**
+ * 组件描述：操作列——增、删两个圆形图标按钮
+ */
+@Composable
+private fun ActionCell() {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CircleIconBtn(plus = true, color = AppColors.AccentPrimary)
+        CircleIconBtn(plus = false, color = AppColors.BasicThree)
+    }
+}
+
+/**
+ * 组件描述：向下箭头（自绘）
+ */
+@Composable
+private fun ArrowDownIcon() {
+    Canvas(modifier = Modifier.size(16.dp)) {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply {
+            moveTo(w * 0.3f, h * 0.42f)
+            lineTo(w * 0.5f, h * 0.6f)
+            lineTo(w * 0.7f, h * 0.42f)
+        }
+        drawPath(path, color = AppColors.BasicThree, style = Stroke(width = 1.5.dp.toPx()))
+    }
+}
+
+/**
+ * 组件描述：圆形增/减图标（自绘）
+ * @param plus true 画加号、false 画减号
+ * @param color 圆底色
+ */
+@Composable
+private fun CircleIconBtn(plus: Boolean, color: Color) {
+    Canvas(modifier = Modifier.size(16.dp)) {
+        val r = size.minDimension / 2f
+        drawCircle(color = color, radius = r)
+        val inset = r * 0.5f
+        drawLine(
+            color = Color.White,
+            start = Offset(center.x - inset, center.y),
+            end = Offset(center.x + inset, center.y),
+            strokeWidth = 1.5.dp.toPx()
+        )
+        if (plus) {
+            drawLine(
+                color = Color.White,
+                start = Offset(center.x, center.y - inset),
+                end = Offset(center.x, center.y + inset),
+                strokeWidth = 1.5.dp.toPx()
+            )
+        }
     }
 }
 
@@ -254,6 +506,14 @@ private fun mockLines(): List<OrderLine> = listOf(
     OrderLine(4, "针织开衫", "米白 / L", "60", "168", "10080", "2026-09-12", "进行中"),
     OrderLine(5, "工装夹克", "军绿 / XL", "45", "215", "9675", "2026-09-18", "已完成"),
     OrderLine(6, "亚麻直筒长裤", "浅咖 / 32", "95", "142", "13490", "2026-09-20", "进行中")
+)
+
+/** 造几条商品用量配置当假数据（最后一条留占位态） */
+private fun mockUsageRows(): List<UsageRow> = listOf(
+    UsageRow("白色;S", "前片", "40.0000", "2", "12", "米"),
+    UsageRow("白色;M", "后片", "40", "0", "7", "米"),
+    UsageRow("白色;L", "领口", "20", "3", "5", "米"),
+    UsageRow("黑色;M", "请选择", "请输入", "请输入", "-", "请选择")
 )
 
 @Preview(showBackground = true, widthDp = 375, heightDp = 700)

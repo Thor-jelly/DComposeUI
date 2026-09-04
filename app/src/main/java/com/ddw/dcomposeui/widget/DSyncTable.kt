@@ -58,7 +58,7 @@ import com.ddw.dcomposeui.theme.AppColors
 /**
  * 类描述：表格列定义——只描述一列的宽度、是否固定、对齐方式与表头内容。
  * cell 是「标准数据行」各列的渲染逻辑（接收整行对象，可组合任意多个字段）；
- * 异构行（小计/合计、分组贯通行）不走 cell，由 DSL 的 columnRow/fullSpanRow 单独提供。
+ * 异构行（小计/合计/分组头/合并行）不走 cell，由 DSL 的 columnRow/stickyFooterRow/fullSpanRow/mergedItem 单独提供。
  *
  * 创建人：吴冬冬
  *
@@ -105,8 +105,9 @@ object DSyncTableDefaults {
 /**
  * DSL 作用域：在 DSyncTable 内声明各类行（可任意顺序混排）。
  * - item/items：标准数据行，用各列 column.cell 渲染，参与横向联动
- * - columnRow：自定义按列行（如小计/合计），各列内容自定，参与横向联动
+ * - columnRow：自定义按列行（如组内小计），各列内容自定，参与横向联动
  * - fullSpanRow：整行贯通行（如分组头/横幅），横跨可视宽度、不横向滚动
+ * - stickyFooterRow：粘性底部行（如合计），固定在表格底部，数据超一屏时不随纵向滚动
  */
 interface DSyncTableScope<T> {
     /**
@@ -123,10 +124,25 @@ interface DSyncTableScope<T> {
     fun items(items: List<T>, key: ((T) -> Any)? = null, height: Dp? = null, minHeight: Dp? = null, background: Color? = null)
 
     /**
-     * 自定义按列行（各列内容自定，参与横向联动）；用于小计/合计等异构行
+     * 自定义按列行（各列内容自定，参与横向联动）；跟随数据一起纵向滚动，用于组内小计等异构行。
+     * 需要「固定在表格底部的合计」请用 [stickyFooterRow]。
      * @param cell 按列索引返回该格内容（columnIndex 对应 columns 下标；无内容返回空即可）
      */
     fun columnRow(
+        key: Any? = null,
+        height: Dp? = null,
+        minHeight: Dp? = null,
+        background: Color = DSyncTableDefaults.SummaryBackground,
+        cell: @Composable (columnIndex: Int) -> Unit,
+    )
+
+    /**
+     * 粘性底部行（sticky footer，固定在表格底部，参与横向联动）；无论声明顺序都渲染在最底部，常用于合计。
+     * 数据没占满一屏时紧跟在数据下方，数据超过一屏时固定在底部、不随纵向滚动。可多次调用（依次堆在底部）。
+     * 要让「超过一屏固定底部」生效，需给表格一个确定的高度（如父容器 fillMaxHeight 或固定高度）。
+     * @param cell 按列索引返回该格内容（columnIndex 对应 columns 下标；无内容返回空即可）
+     */
+    fun stickyFooterRow(
         key: Any? = null,
         height: Dp? = null,
         minHeight: Dp? = null,
@@ -173,11 +189,11 @@ interface DSyncTableScope<T> {
     )
 }
 
-/** 行定义（内部）：按列联动行 或 整行贯通行 */
+/** 行定义（内部）：按列联动行、整行贯通行、纵向合并行三类 */
 private sealed interface TableRowSpec {
     val key: Any?
 
-    /** 按列布局行（固定列 + 横向滚动列，参与联动）；数据行与小计行都属此类。adaptive=true 时 height 作为最小行高 */
+    /** 按列布局行（固定列 + 横向滚动列，参与联动）；数据行、小计行、合计行都属此类。adaptive=true 时 height 作为最小行高 */
     class ColumnRow(
         override val key: Any?,
         val height: Dp,
@@ -209,7 +225,7 @@ private sealed interface TableRowSpec {
     ) : TableRowSpec
 }
 
-/** DSyncTableScope 实现：收集行定义供 LazyColumn 渲染 */
+/** DSyncTableScope 实现：普通行收进 specs（供 LazyColumn 渲染），合计行收进 footerSpecs（固定底部） */
 private class DSyncTableScopeImpl<T>(
     private val columns: List<DTableColumn<T>>,
     private val defaultRowHeight: Dp,
@@ -218,6 +234,9 @@ private class DSyncTableScopeImpl<T>(
 ) : DSyncTableScope<T> {
 
     val specs = mutableListOf<TableRowSpec>()
+
+    /** 粘性底部行（固定在表格底部，常用于合计），与普通行分开收集，不进 LazyColumn */
+    val footerSpecs = mutableListOf<TableRowSpec.ColumnRow>()
 
     /** 解析行高：行级 minHeight（自适应）> 行级 height（固定）> 组件级 minRowHeight（自适应）> 组件级 rowHeight（固定） */
     private fun resolveHeight(height: Dp?, minHeight: Dp?): Pair<Dp, Boolean> = when {
@@ -247,6 +266,11 @@ private class DSyncTableScopeImpl<T>(
     override fun columnRow(key: Any?, height: Dp?, minHeight: Dp?, background: Color, cell: @Composable (Int) -> Unit) {
         val (h, adaptive) = resolveHeight(height, minHeight)
         specs.add(TableRowSpec.ColumnRow(key, h, adaptive, background, cell))
+    }
+
+    override fun stickyFooterRow(key: Any?, height: Dp?, minHeight: Dp?, background: Color, cell: @Composable (Int) -> Unit) {
+        val (h, adaptive) = resolveHeight(height, minHeight)
+        footerSpecs.add(TableRowSpec.ColumnRow(key, h, adaptive, background, cell))
     }
 
     override fun fullSpanRow(key: Any?, background: Color, content: @Composable () -> Unit) {
@@ -283,7 +307,8 @@ private class DSyncTableScopeImpl<T>(
 /**
  * 组件描述：横向联动滚动表格（左侧固定列 + 右侧多列横向滚动，整体纵向滚动）。
  * 表头与所有行共享同一个横向滚动状态实现联动，替代传统 View 里手动维护的 scrollViews + recordX。
- * 行内容用 DSL 声明：items（标准数据行）、columnRow（小计/合计）、fullSpanRow（分组贯通行），可任意混排。
+ * 行内容用 DSL 声明：items（标准数据行）、columnRow（组内小计）、fullSpanRow（分组贯通行）、
+ * mergedItem（纵向合并行）可任意混排；stickyFooterRow（粘性底部行，常用于合计）固定在表格底部，数据超过一屏时不随纵向滚动。
  * @param columns 列定义（宽度/是否固定/表头/标准行 cell）
  * @param showHeader 是否显示表头行（false 时无标题行，直接展示数据）
  * @param headerHeight 固定表头行高（未设置 minHeaderHeight 时生效）
@@ -321,7 +346,9 @@ fun <T> DSyncTable(
     val scrollable = indexedColumns.filterNot { it.value.frozen }
 
     // 收集行定义（每次重组重新收集，lambda 捕获最新数据）
-    val specs = DSyncTableScopeImpl(columns, rowHeight, minRowHeight, cellBackground).apply(content).specs
+    val scope = DSyncTableScopeImpl(columns, rowHeight, minRowHeight, cellBackground).apply(content)
+    val specs = scope.specs
+    val footerSpecs = scope.footerSpecs
 
     Column(modifier) {
         // 表头行（showHeader=false 时无标题行，直接展示数据）
@@ -339,10 +366,13 @@ fun <T> DSyncTable(
         }
 
         if (specs.isEmpty()) {
-            // 无任何行：表头下方居中展示「暂无数据」
+            // 无任何数据行：只展示「暂无数据」，不显示合计行（没有数据，合计无意义）
             TableEmpty(text = emptyText)
         } else {
-            LazyColumn {
+            // 有粘性底部行时数据区用 weight(fill=false)：数据没占满一屏就按内容高度收缩、让底部行紧跟其后；
+            // 数据超过剩余空间则占满并内部滚动，把底部行顶到底部固定。无粘性底部行时保持原样（不加 weight）。
+            val dataModifier = if (footerSpecs.isNotEmpty()) Modifier.weight(1f, fill = false) else Modifier
+            LazyColumn(dataModifier) {
                 itemsIndexed(specs, key = { index, spec -> spec.key ?: index }) { _, spec ->
                     when (spec) {
                         is TableRowSpec.ColumnRow -> ColumnRowLayout(
@@ -379,6 +409,21 @@ fun <T> DSyncTable(
                         )
                     }
                 }
+            }
+
+            // 粘性底部行：固定在表格底部（不随 LazyColumn 纵向滚动），与数据行共享 hScroll 横向联动
+            footerSpecs.forEach { spec ->
+                ColumnRowLayout(
+                    frozen = frozen,
+                    scrollable = scrollable,
+                    hScroll = hScroll,
+                    rowHeight = spec.height,
+                    adaptive = spec.adaptive,
+                    background = spec.background,
+                    gridLineColor = gridLineColor,
+                    scrollShadow = scrollShadow,
+                    cellContent = spec.cell,
+                )
             }
         }
     }
@@ -1072,6 +1117,54 @@ private fun DSyncTableNoHeaderPreview() {
     // showHeader = false：不渲染表头行，直接展示数据
     DSyncTable(columns = columns, showHeader = false, modifier = Modifier.fillMaxWidth(), rowHeight = 36.dp) {
         items(rows, key = { it.index })
+    }
+}
+
+/** 粘性底部行预览用列 */
+private fun footerPreviewColumns() = listOf(
+    textColumn<BudgetRowPreview>("序", 40.dp, frozen = true) { it.index.toString() },
+    textColumn<BudgetRowPreview>("出入仓单号", 80.dp) { it.orderNo },
+    textColumn<BudgetRowPreview>("类型", 80.dp) { it.type },
+    textColumn<BudgetRowPreview>("仓库", 60.dp) { it.warehouse },
+    textColumn<BudgetRowPreview>("领料人", 60.dp) { it.picker },
+    textColumn<BudgetRowPreview>("创建日期", 140.dp) { it.date },
+)
+
+@Preview(name = "粘性底部行-超一屏固定底部", widthDp = 375, heightDp = 300, showBackground = true, backgroundColor = 0xFFFFFFFF)
+@Composable
+private fun DSyncTableStickyFooterPinnedPreview() {
+    val rows = List(12) { i ->
+        BudgetRowPreview(i + 1, "36623", "领用出仓", "鼎盛", "万里", "2025-10-22 08:57:42")
+    }
+    // 数据超过一屏：数据区内部滚动，合计行被顶到底部固定（需给表格确定高度，这里用 fillMaxHeight）
+    DSyncTable(columns = footerPreviewColumns(), modifier = Modifier.fillMaxHeight(), rowHeight = 36.dp) {
+        items(rows, key = { it.index })
+        stickyFooterRow { columnIndex ->
+            when (columnIndex) {
+                0 -> TableCellText("合计", fontWeight = FontWeight.Medium)
+                1 -> TableCellText("12 单", fontWeight = FontWeight.Medium)
+                else -> {}
+            }
+        }
+    }
+}
+
+@Preview(name = "粘性底部行-未满一屏跟随数据", widthDp = 375, heightDp = 300, showBackground = true, backgroundColor = 0xFFFFFFFF)
+@Composable
+private fun DSyncTableStickyFooterFollowPreview() {
+    val rows = List(3) { i ->
+        BudgetRowPreview(i + 1, "36623", "领用出仓", "鼎盛", "万里", "2025-10-22 08:57:42")
+    }
+    // 数据没占满一屏：合计行紧跟在数据下方，下方留白
+    DSyncTable(columns = footerPreviewColumns(), modifier = Modifier.fillMaxHeight(), rowHeight = 36.dp) {
+        items(rows, key = { it.index })
+        stickyFooterRow { columnIndex ->
+            when (columnIndex) {
+                0 -> TableCellText("合计", fontWeight = FontWeight.Medium)
+                1 -> TableCellText("3 单", fontWeight = FontWeight.Medium)
+                else -> {}
+            }
+        }
     }
 }
 
