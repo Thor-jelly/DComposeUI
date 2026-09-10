@@ -321,6 +321,10 @@ private class DSyncTableScopeImpl<T>(
  * @param scrollShadow 横向滚动时是否在固定列右侧显示阴影
  * @param emptyText 无任何行时展示的文案（默认「暂无数据」）
  * @param content 行声明 DSL
+ *
+ * 性能评估须用 release 包：debug 包关闭 R8、带组合追踪开销，且 isDebuggable=true 会让 ART 放弃部分优化，
+ * Compose 会慢好几倍。本表格在低端机 debug 下滚动明显卡顿、同一版本 release 下顺滑，
+ * 属于 debug 开销而非实现问题——别照着 debug 的表现去优化。
  */
 @Composable
 fun <T> DSyncTable(
@@ -557,6 +561,10 @@ private fun <T> ColumnRowLayout(
  * 取「该子行在各拆分列中的最大高度」作为行高，再拿这套高度正式渲染。
  * 代价是拆分列的内容会被组合两次（试测那趟只测量不绘制）。
  *
+ * 性能注意：试测的所有格子（拆分列子格 + 合并列）合并在一个 subcompose 里一次性组合，
+ * 靠发射顺序与 measurable 顺序一一对应来取值。不要退回「每格一个 subcompose」的写法——
+ * 那样一行会新建十几个 composition，滚动时每有新行进入可视区都要付这笔开销。
+ *
  * @param adaptive 是否按内容自适应子行高度，false 时 subRowHeight 为固定值、true 时为最小值
  * @param mergeColumns 需要纵向合并的列下标
  * @param mergedCell 合并列内容
@@ -596,41 +604,50 @@ private fun <T> MergedRowLayout(
 
     SubcomposeLayout(modifier = Modifier.fillMaxWidth()) { constraints ->
         val minSubHeightPx = subRowHeight.roundToPx()
-        val splitColumns = (frozen + scrollable).filterNot { it.index in mergeColumns }
+        val allColumns = frozen + scrollable
+        val splitColumns = allColumns.filterNot { it.index in mergeColumns }
+        val mergedColumns = allColumns.filter { it.index in mergeColumns }
 
-        // 第一趟：逐个拆分列子格试测，同一子行取各列中的最大高度
-        val subHeightsPx = IntArray(subRowCount) { minSubHeightPx }
-        splitColumns.forEach { iv ->
-            val cellWidthPx = iv.value.width.roundToPx()
-            repeat(subRowCount) { subIndex ->
-                subcompose("probe_${iv.index}_$subIndex") {
+        // 第一趟：试测所有格子。全部放进同一个 subcompose 一次性组合（顺序：各拆分列的子格 → 各合并列），
+        // 再按同样顺序取回 measurable 逐个测量。若逐格单独 subcompose，一行要新建十几个 composition，
+        // 滚动时每有新行进入可视区都付这笔开销，低端机会明显掉帧
+        val probeMeasurables = subcompose("probe") {
+            splitColumns.forEach { iv ->
+                repeat(subRowCount) { subIndex ->
                     // 内边距要与真实子格一致，否则可用宽度不同、测出的换行行数也不同
                     Box(modifier = Modifier.padding(horizontal = TableCellPadding)) {
                         subCell(iv.index, subIndex)
                     }
-                }.forEach { measurable ->
-                    val height = measurable
-                        .measure(Constraints(minWidth = cellWidthPx, maxWidth = cellWidthPx))
-                        .height
-                    subHeightsPx[subIndex] = maxOf(subHeightsPx[subIndex], height)
                 }
             }
-        }
-
-        // 合并列自己也可能比子行加起来还高（比如规格换了三行），同样要试测一遍
-        var mergedNeedPx = 0
-        (frozen + scrollable).filter { it.index in mergeColumns }.forEach { iv ->
-            val cellWidthPx = iv.value.width.roundToPx()
-            subcompose("probe_merged_${iv.index}") {
+            mergedColumns.forEach { iv ->
                 Box(modifier = Modifier.padding(horizontal = TableCellPadding)) {
                     mergedCell(iv.index)
                 }
-            }.forEach { measurable ->
-                val height = measurable
+            }
+        }
+        var probeIndex = 0
+
+        // 拆分列：同一子行取各列中的最大高度
+        val subHeightsPx = IntArray(subRowCount) { minSubHeightPx }
+        splitColumns.forEach { iv ->
+            val cellWidthPx = iv.value.width.roundToPx()
+            repeat(subRowCount) { subIndex ->
+                val height = probeMeasurables[probeIndex++]
                     .measure(Constraints(minWidth = cellWidthPx, maxWidth = cellWidthPx))
                     .height
-                mergedNeedPx = maxOf(mergedNeedPx, height)
+                subHeightsPx[subIndex] = maxOf(subHeightsPx[subIndex], height)
             }
+        }
+
+        // 合并列自己也可能比子行加起来还高（比如规格换了三行）
+        var mergedNeedPx = 0
+        mergedColumns.forEach { iv ->
+            val cellWidthPx = iv.value.width.roundToPx()
+            val height = probeMeasurables[probeIndex++]
+                .measure(Constraints(minWidth = cellWidthPx, maxWidth = cellWidthPx))
+                .height
+            mergedNeedPx = maxOf(mergedNeedPx, height)
         }
         // 合并列更高时把差额摊到各子行，两边总高才能保持相等
         val sumPx = subHeightsPx.sum()
