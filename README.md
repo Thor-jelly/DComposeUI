@@ -6,6 +6,10 @@ DComposeUI 把刷新、复杂表格、锚点浮层、滚轮选择、拖拽排序
 
 > 当前仓库是单 `app` 模块示例工程，尚未发布 Maven 依赖。请直接阅读 Demo，或按需抽取组件源码到自己的项目中。
 
+## 公众号文章
+
+- [微信公众号文章入口（暂时未发布）](https://mp.weixin.qq.com/)
+
 ## 组件一览
 
 | 组件 | 核心能力 | 源码 | Demo |
@@ -154,10 +158,6 @@ LazyColumn(state = listState) {
 │  └─ widget/        # UI 组件实现
 └─ images/gifs/      # README 演示动图
 ```
-
-## 文章系列
-
-组件实现背后的布局、状态与手势原理整理在 [DComposeUI 系列文章](https://gitee.com/withwudongdong/gzh/tree/master/Android/DComposeUI%E7%B3%BB%E5%88%97) 中。
 
 ## License
 
