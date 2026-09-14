@@ -1,130 +1,163 @@
 # DComposeUI
 
-一个专注于实用场景的 Jetpack Compose UI 组件与交互示例项目。
+面向真实业务场景的 Jetpack Compose 组件与交互示例。
 
-DComposeUI 将常见但实现细节较多的 UI 能力整理为可阅读、可运行的 Compose 源码，并通过独立 Demo 展示组件状态管理和交互方式。项目当前是单 `app` 模块示例工程，尚未发布 Maven 依赖。
+DComposeUI 把刷新、复杂表格、锚点浮层、滚轮选择、拖拽排序和输入校验等常见能力整理为可阅读、可运行的源码，并通过独立 Demo 展示状态管理、布局策略与交互边界。
 
-## 组件
+> 当前仓库是单 `app` 模块示例工程，尚未发布 Maven 依赖。请直接阅读 Demo，或按需抽取组件源码到自己的项目中。
 
-| 组件 | 能力 |
-| --- | --- |
-| `DRefreshList` | 下拉刷新、上拉加载、空态和无更多数据状态 |
-| `DSyncTable` | 冻结列、表头与内容横向同步、分组/小计行、纵向合并 |
-| `DBubbleMenu` | 锚点菜单、文本或自定义菜单项、自动贴屏 |
-| `DBubbleTip` | 多方向锚点气泡、箭头定位、点击外部关闭 |
-| `DWheelPicker` | 基于 LazyColumn 的吸附滚轮及中心项视觉效果 |
-| `DDateTimePicker` | 年月日时分秒联动选择与日期校正 |
-| `DDateRangePicker` | 开始/结束日期选择和区间校验 |
-| `DDragSortItem` | LazyColumn 拖拽排序、拖动手柄、边缘自动滚动 |
-| `DClearableField` | 可清空输入框、自动聚焦和列表焦点隔离 |
-| `DNumberField` | 整数/小数限制、负数、最大值和失焦格式化 |
+## 组件一览
 
-Demo 首页按以下六组集中展示组件：刷新列表、同步表格、气泡浮层、滚轮与日期选择、拖拽排序、输入框。
+| 组件 | 核心能力 | 源码 | Demo |
+| --- | --- | --- | --- |
+| `DRefreshList` | 下拉刷新、上拉加载、空态、无更多数据 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DRefreshList.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DRefreshListDemo.kt) |
+| `DSyncTable` | 冻结列、同步横滚、异构行、固定底部合计、纵向合并、自适应行高、无表头与空态 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DSyncTable.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DSyncTableDemo.kt) |
+| `DBubbleMenu` | 文本或自定义锚点菜单、安全区贴边 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DBubbleMenu.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DBubbleDemo.kt) |
+| `DBubbleTip` | 多方向提示气泡、箭头回指、点击外部关闭 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DBubbleTip.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DBubbleDemo.kt) |
+| `DWheelPicker` | `LazyColumn` 吸附滚轮、中心项视觉反馈、受控选中值 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DWheelPicker.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DWheelPickerDemo.kt) |
+| `DDateTimePicker` | 年月日时分秒联动选择与日期校正 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DDateTimePicker.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DWheelPickerDemo.kt) |
+| `DDateRangePicker` | 开始/结束日期选择与区间校验 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DDateRangePicker.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DWheelPickerDemo.kt) |
+| `DDragSortItem` | `LazyColumn` 拖拽排序、手柄/长按触发、边缘自动滚动 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DDragSortList.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DDragSortDemo.kt) |
+| `DClearableField` | 可清空输入框、焦点恢复、列表焦点隔离 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DClearableField.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DInputFieldDemo.kt) |
+| `DNumberField` | 整数/小数过滤、负数、最大值钳制、失焦格式化 | [源码](app/src/main/java/com/ddw/dcomposeui/widget/DNumberField.kt) | [Demo](app/src/main/java/com/ddw/dcomposeui/demo/screen/DInputFieldDemo.kt) |
 
 ## Demo 效果
 
-点击 Demo 名称可查看对应源码。
+点击名称可查看对应 Demo 源码。
 
 <table>
   <tr>
     <td align="center">
       <a href="app/src/main/java/com/ddw/dcomposeui/demo/screen/DRefreshListDemo.kt"><strong>刷新列表</strong></a><br>
-      <img src="images/gifs/refresh-list.gif" width="240" alt="DRefreshList 下拉刷新与上拉加载 Demo">
+      <img src="images/gifs/refresh-list.gif" width="240" alt="DRefreshList 下拉刷新、上拉加载与空态 Demo">
     </td>
     <td align="center">
       <a href="app/src/main/java/com/ddw/dcomposeui/demo/screen/DSyncTableDemo.kt"><strong>同步表格</strong></a><br>
-      <img src="images/gifs/sync-table.gif" width="240" alt="DSyncTable 冻结列与同步滚动 Demo">
+      <img src="images/gifs/sync-table.gif" width="240" alt="DSyncTable 冻结列、固定底部合计与纵向合并 Demo">
     </td>
     <td align="center">
       <a href="app/src/main/java/com/ddw/dcomposeui/demo/screen/DBubbleDemo.kt"><strong>气泡浮层</strong></a><br>
-      <img src="images/gifs/bubble.gif" width="240" alt="DBubbleMenu 与 DBubbleTip Demo">
+      <img src="images/gifs/bubble.gif" width="240" alt="DBubbleMenu 与 DBubbleTip 锚点浮层 Demo">
     </td>
   </tr>
   <tr>
     <td align="center">
       <a href="app/src/main/java/com/ddw/dcomposeui/demo/screen/DWheelPickerDemo.kt"><strong>滚轮与日期选择</strong></a><br>
-      <img src="images/gifs/wheel-date.gif" width="240" alt="DWheelPicker 与日期选择器 Demo">
+      <img src="images/gifs/wheel-date.gif" width="240" alt="DWheelPicker、日期时间与日期区间 Demo">
     </td>
     <td align="center">
       <a href="app/src/main/java/com/ddw/dcomposeui/demo/screen/DDragSortDemo.kt"><strong>拖拽排序</strong></a><br>
-      <img src="images/gifs/drag-sort.gif" width="240" alt="DDragSortItem 拖拽排序 Demo">
+      <img src="images/gifs/drag-sort.gif" width="240" alt="DDragSortItem 手柄拖拽与长按拖拽 Demo">
     </td>
     <td align="center">
       <a href="app/src/main/java/com/ddw/dcomposeui/demo/screen/DInputFieldDemo.kt"><strong>输入框</strong></a><br>
-      <img src="images/gifs/input-fields.gif" width="240" alt="DClearableField 与 DNumberField Demo">
+      <img src="images/gifs/input-fields.gif" width="240" alt="DClearableField 与 DNumberField 输入 Demo">
     </td>
   </tr>
 </table>
 
-## 公众号文章
+## 如何复用
 
-DComposeUI 的 Compose 布局原理和组件源码实战会在微信公众号发布，README 与公众号文章互相引流。
-
-- [微信公众号文章入口（暂时未发布）](https://mp.weixin.qq.com/)
-
-> 当前链接仅作占位；文章发布后，请手动替换为正确的公众号文章地址。
-
-## 运行项目
-
-### 环境要求
-
-- Android Studio（支持 AGP 9.3.1）
-- Android SDK Platform 37
-- Android 7.0 / API 24 或更高版本的设备或模拟器
-- 首次构建需要联网下载 Gradle 和依赖
-
-使用 Android Studio 打开仓库根目录，等待 Gradle Sync 完成后，选择 `app` 配置并运行即可。
-
-也可以在 Windows PowerShell 中执行：
-
-```powershell
-.\gradlew.bat assembleDebug
-```
-
-连接设备或启动模拟器后安装：
-
-```powershell
-.\gradlew.bat installDebug
-```
-
-调试 APK 输出目录：`app/build/outputs/apk/debug/`。
-
-## 如何复用组件
-
-组件源码位于：
+组件实现集中在：
 
 ```text
 app/src/main/java/com/ddw/dcomposeui/widget/
 ```
 
-对应使用示例位于：
+对应示例集中在：
 
 ```text
 app/src/main/java/com/ddw/dcomposeui/demo/screen/
 ```
 
-当前仓库未配置 Android Library 模块和 Maven 发布，因此请勿添加不存在的 `implementation(...)` 坐标。你可以直接参考 Demo 使用组件，或将需要的组件源码及相关主题/扩展复制、抽取到自己的 Library 模块中。
+仓库没有可用的 `implementation(...)` 坐标。建议从 Demo 追踪组件依赖，再把需要的源码、主题与扩展抽取到自己的 Library 模块中。
 
-拖拽排序采用组合式 API：通过 `rememberDDragSortState()` 创建状态，在调用方的 `LazyColumn` 中使用 `DDragSortItem` 包裹列表项，并在 `onMove` 中同步更新业务数据顺序。
+### `DSyncTable` DSL
+
+```kotlin
+val columns = listOf(
+    DTableColumn<Order>(
+        width = 120.dp,
+        frozen = true,
+        header = { Text("订单号") },
+        cell = { Text(it.orderNo) },
+    ),
+    DTableColumn<Order>(
+        width = 96.dp,
+        header = { Text("数量") },
+        cell = { Text(it.quantity.toString()) },
+    ),
+)
+
+DSyncTable(
+    columns = columns,
+    modifier = Modifier.fillMaxSize(),
+) {
+    items(orders, key = { it.id })
+    stickyFooterRow { columnIndex ->
+        if (columnIndex == 0) Text("合计")
+    }
+}
+```
+
+`stickyFooterRow` 位于数据列表之外；要让长表滚动时合计行固定在底部，表格必须从父布局获得确定高度。`key` 参数目前只会被保存，渲染页脚时不会被消费，因此不要依赖它管理页脚身份；没有普通数据行时只展示空态，页脚不会渲染。
+
+### `DDragSortItem` 组合式拖拽
+
+```kotlin
+val listState = rememberLazyListState()
+val rows = remember { initialRows.toMutableStateList() }
+val dragState = rememberDDragSortState(
+    lazyListState = listState,
+    onMove = { from, to ->
+        rows.add(to, rows.removeAt(from))
+    },
+)
+
+LazyColumn(state = listState) {
+    items(rows, key = { it.id }) { row ->
+        DDragSortItem(
+            state = dragState,
+            key = row.id,
+        ) {
+            Row(Modifier.longPressDraggableHandle()) {
+                Text(row.title)
+            }
+        }
+    }
+}
+```
+
+`DDragSortItem.key` 必须与 `LazyColumn.items(key = ...)` 使用同一个稳定业务标识；`onMove` 收到位置变化后，需要立即同步可观察列表的顺序。
+
+## 使用边界
+
+| 组件 | 需要调用方保证的约束 |
+| --- | --- |
+| `DRefreshList` | 释放达到阈值只触发回调；回调内应立即将对应状态设为 `true`，成功、失败或取消后都复位为 `false`，且刷新与加载状态必须互斥 |
+| `DSyncTable` | 自适应行和纵向合并会增加测量成本；大数据量性能请以 release 包为准 |
+| `DBubbleMenu` | 自定义 `items` 重载无法判断何时选中，点击后需要调用方主动关闭 |
+| `DBubbleMenu` / `DBubbleTip` | 超出窗口时会夹回安全区域，不会自动从下方翻转到上方 |
+| `DWheelPicker` | `items` 必须非空、值应唯一，`selected` 必须属于列表；运行期间更换列表内容或长度可能让位置同步失效，更适合稳定列表 |
+| `DDateTimePicker` / `DDateRangePicker` | 必须保证 `minYear <= maxYear` 且初始年份位于区间内；动态日列表需要先处理滚轮的位置同步问题；确认回调不会自动关闭弹窗 |
+| `DDragSortItem` | 稳定 key 与及时换位是正确拖动的前提；状态会持有首次 `onMove` 和密度阈值，调用期间应保持其语义与显示密度稳定 |
+| `DNumberField` | 输入只接受英文句点，输出却跟随默认 Locale，逗号小数地区尚未形成编辑闭环；`FLOOR` 对负数向负无穷舍入，`Double` 也不适合高精度金额 |
 
 ## 项目结构
 
 ```text
-app/src/main/java/com/ddw/dcomposeui/
-├─ demo/          # Demo 入口、首页和示例页面
-├─ ext/           # Compose 扩展
-├─ theme/         # 应用颜色与主题
-└─ widget/        # UI 组件实现
+.
+├─ app/src/main/java/com/ddw/dcomposeui/
+│  ├─ demo/          # Demo 入口与示例页面
+│  ├─ ext/           # Compose 扩展
+│  ├─ theme/         # 应用颜色与主题
+│  └─ widget/        # UI 组件实现
+└─ images/gifs/      # README 演示动图
 ```
 
-## 技术栈
+## 文章系列
 
-- Kotlin 2.4.0
-- Jetpack Compose / Material 3
-- Compose BOM 2026.06.01
-- Android Gradle Plugin 9.3.1
-- Coil 3.5.0
-- minSdk 24 / targetSdk 37 / compileSdk 37
+组件实现背后的布局、状态与手势原理整理在 [DComposeUI 系列文章](https://gitee.com/withwudongdong/gzh/tree/master/Android/DComposeUI%E7%B3%BB%E5%88%97) 中。
 
 ## License
 
